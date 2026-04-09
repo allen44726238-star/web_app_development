@@ -1,84 +1,88 @@
-# 系統流程圖與功能對照表
+# 線上算命系統 - 流程圖與對照表
 
-本文件依據 PRD 與系統架構規劃，定義使用者的操作動線以及系統內部的資料流程。
+本文件根據專案的 PRD 與架構設計，繪製了使用者的操作流程圖（User Flow），以及核心功能的系統序列圖（Sequence Diagram），最後附上各功能與預計路由的路徑對照表。
 
 ## 1. 使用者流程圖（User Flow）
 
-描述使用者從進入系統到執行主要功能（註冊登入、搜尋、CRUD 等）的完整操作路徑。
+描述使用者從進入系統到操作各項主要功能的完整路徑。
 
 ```mermaid
 flowchart LR
-    A([使用者造訪首頁]) --> B{是否已登入？}
-    B -->|否| C[註冊 / 登入頁]
-    C -->|成功| D[首頁 / 儀表板]
-    B -->|是| D
+    A([使用者開啟網站]) --> B(首頁 - 顯示基本介紹與每日運勢)
     
-    D --> E{選擇操作}
+    B --> C{是否已登入?}
+    C -->|否| D[點擊登入/註冊]
+    D --> E[填寫帳號密碼]
+    E --> F{驗證成功?}
+    F -->|否| D
+    F -->|是| B
     
-    E -->|一般搜尋| F[輸入關鍵字]
-    F --> G[食譜列表頁]
+    C -->|是| G{選擇操作?}
     
-    E -->|食材組合搜尋| H[輸入多種食材]
-    H --> G
+    G -->|開始抽籤| H[進入抽籤/儀式頁面]
+    H --> I[搖籤筒動畫/點擊抽籤]
+    I --> J[顯示求得的籤號]
+    J --> K[進入解籤詳情頁面]
+    K --> L[檢視籤詩與事業/感情解析]
+    L --> M([系統自動儲存結果])
     
-    E -->|瀏覽| G
+    G -->|查看紀錄| N[進入歷史紀錄頁面]
+    N --> O[瀏覽過去抽籤紀錄與解析]
     
-    G -->|點擊食譜| I[食譜詳細資訊頁]
+    G -->|捐香油錢| P[進入香油錢贊助頁面]
+    P --> Q[查看匯款資訊/送出贊助表單]
     
-    E -->|新增食譜| J[填寫新增表單]
-    J -->|儲存| I
-    
-    I -->|編輯| K[修改食譜表單]
-    K -->|儲存| I
-    
-    I -->|刪除| L[確認刪除]
-    L --> G
-    
-    E -->|管理權限| M[後台管理畫面]
-    M -->|檢視使用者/強制下架| N[管理員操作]
+    G -->|登出| R([結束使用並登出])
+    R --> B
 ```
 
 ## 2. 系統序列圖（Sequence Diagram）
 
-以下描述「使用者填寫新食譜並送出」到「資料存入資料庫」的完整流程。
+此序列圖描述核心功能：「使用者點擊抽籤」一直到「獲得詳細解籤並儲存在資料庫」的完整資料流。
 
 ```mermaid
 sequenceDiagram
     actor User as 使用者
     participant Browser as 瀏覽器
-    participant Route as Flask Route
-    participant Model as Recipe Model
-    participant DB as SQLite DB
+    participant Flask as Flask (Controller)
+    participant Model as Model (Fortune/History)
+    participant DB as SQLite
     
-    User->>Browser: 填寫新增食譜表單並點擊「儲存」
-    Browser->>Route: POST /recipes/new (帶有表單資料)
-    Route->>Route: 驗證使用者身分與資料格式
-    Route->>Model: 呼叫 create_recipe(data)
+    User->>Browser: 在抽籤頁面點擊「開始抽籤」
+    Browser->>Flask: POST /fortune/draw
     
-    Model->>DB: INSERT INTO recipes (名稱, 步驟...)
-    DB-->>Model: 回傳食譜 ID
-    Note over Model, DB: 透過關聯表處理多對多食材資料
-    Model->>DB: INSERT INTO recipe_ingredients (食譜ID, 食材ID)
-    DB-->>Model: 寫入成功
-    Model-->>Route: 回傳處理成功狀態
+    Flask->>Model: 呼叫抽籤邏輯 (FortuneModel.draw_random())
+    Model->>DB: 查詢所有籤詩 (SELECT random one)
+    DB-->>Model: 回傳抽中的籤詩資料
+    Model-->>Flask: 取得籤號與解析資料
     
-    Route-->>Browser: HTTP 302 Redirect 
-    Browser->>User: 重新導向至該篇「食譜詳細資訊頁」
+    opt 使用者已登入
+        Flask->>Model: 呼叫儲存邏輯 (HistoryModel.save(user_id, fortune_id))
+        Model->>DB: 寫入歷史紀錄 (INSERT INTO history)
+        DB-->>Model: 成功
+        Model-->>Flask: 儲存完畢
+    end
+    
+    Flask->>Browser: 重導向 (Redirect) 至解籤結果頁面 /fortune/result/<id>
+    Browser->>Flask: GET /fortune/result/<id>
+    Flask->>Browser: 透過 Jinja2 渲染含有籤詩解析的 HTML
+    Browser-->>User: 畫面顯示籤詩與白話文解析結果
 ```
 
-## 3. 功能清單與路由對照表
+## 3. 功能清單對照表
 
-以下整理系統主要功能、預期的網址路徑 (URL) 以及對應的 HTTP 請求方法。
+根據 PRD 提出的功能，對應預計實作的 URL 路徑與發送的 HTTP 方法：
 
-| 功能名稱 | URL 路徑 | HTTP 方法 | 說明 |
-| :--- | :--- | :---: | :--- |
-| **首頁 / 列表** | `/` 或 `/recipes` | GET | 顯示食譜列表，支援一般關鍵字搜尋與食材組合搜尋。 |
-| **註冊帳號** | `/auth/register` | GET, POST | 顯示註冊表單，處理註冊邏輯並存入使用者資料。 |
-| **登入系統** | `/auth/login` | GET, POST | 顯示登入表單，驗證帳號密碼並建立 session。 |
-| **登出系統** | `/auth/logout` | GET (或 POST) | 清除 session，並重導向回首頁或登入頁。 |
-| **新增食譜** | `/recipes/new` | GET, POST | GET 顯示表單；POST 處理並寫入新食譜與食材資料。 |
-| **食譜詳細資訊** | `/recipes/<id>` | GET | 檢視該筆食譜的所有內容、步驟與所需食材。 |
-| **編輯食譜** | `/recipes/<id>/edit` | GET, POST | GET 顯示帶有原資料的表單；POST 更新內容至資料庫。 |
-| **刪除食譜** | `/recipes/<id>/delete`| POST | 將該筆食譜自資料庫中移除（僅限原作者或管理員）。 |
-| **後台：管理面板**| `/admin` | GET | 顯示全站資訊概覽（僅限管理員）。 |
-| **後台：用戶清單**| `/admin/users` | GET | 檢視所有註冊用戶清單。 |
+| 功能需求 | 對應介面 / 操作 | HTTP 方法 | URL 路徑 (預計) |
+| -------- | --------------- | --------- | --------------- |
+| 1. 首頁/每日運勢 | 顯示系統首頁與當日簡易運勢 | GET | `/` |
+| 2. 會員註冊 | 進入註冊頁面 | GET | `/auth/register` |
+| | 送出註冊資料 | POST | `/auth/register` |
+| 3. 會員登入 | 進入登入頁面 | GET | `/auth/login` |
+| | 送出登入資料 | POST | `/auth/login` |
+| 4. 會員登出 | 執行登出操作 | GET | `/auth/logout` |
+| 5. 算命抽籤 | 進入抽籤儀式頁面 | GET | `/fortune` |
+| | 執行隨機抽籤操作 | POST | `/fortune/draw` |
+| 6. 靈籤解析 | 顯示單一籤詩的詳細解析結果 | GET | `/fortune/result/<fortune_id>` |
+| 7. 儲存/查詢紀錄 | 查看自己的歷史抽籤結果列表 | GET | `/history` |
+| 8. 捐香油錢 | 顯示贊助資訊與表單 | GET | `/donate` |
