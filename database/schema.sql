@@ -1,0 +1,26 @@
+CREATE TABLE IF NOT EXISTS user (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS fortune (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fortune_num INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    poem TEXT NOT NULL,
+    explanation TEXT NOT NULL,
+    career_explanation TEXT,
+    love_explanation TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    fortune_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES user(id),
+    FOREIGN KEY (fortune_id) REFERENCES fortune(id)
+);
